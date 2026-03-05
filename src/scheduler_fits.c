@@ -60,6 +60,7 @@ int init_fits_header(Fits_Header *header)
         header->num_words=0;
         if(add_fits_word(header,FILTERNAME_KEYWORD,BLANK_VALUE)<0)return(-1);
         else if(add_fits_word(header,FILTERID_KEYWORD,"0")<0)return(-1);
+        else if(add_fits_word(header,OBSERVAT_KEYWORD,OBSERVATORY_SITE)<0)return(-1);
         else if(add_fits_word(header,LST_KEYWORD,"0.0")<0)return(-1);
         else if(add_fits_word(header,HA_KEYWORD,"0.0")<0)return(-1);
         else if(add_fits_word(header,IMAGETYPE_KEYWORD,BLANK_VALUE)<0)return(-1);

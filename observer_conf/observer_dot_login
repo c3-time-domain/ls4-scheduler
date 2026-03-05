@@ -143,7 +143,7 @@ setenv TCS_PROG_NAME $LS4_ROOT/bin/tcs_talk_client.pl
 setenv TCS_STATUS_FILE $LS4_ROOT/logs/tcs.status
 
 # amp selection can be "both", "left", or "right"
-setenv CCD_AMP_SELECTION "both"
-#setenv CCD_AMP_SELECTION "left"
+#setenv CCD_AMP_SELECTION "both"
+setenv CCD_AMP_SELECTION "left"
 setenv login_done "1"
 #endif

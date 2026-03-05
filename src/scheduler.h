@@ -62,7 +62,7 @@
 #define MAX_HOURANGLE 4.3
 #define MAX_OBS_PER_FIELD 100 /* maximum number of observations per field */
 #define MAX_FIELDS 500  /* maximum number of fields per script */
-#define OBSERVATORY_SITE "La Silla"
+#define OBSERVATORY_SITE "ESO_La_Silla"
 #define MAX_EXPT 1000.0
 #define MAX_INTERVAL (43200.0/3600.0)
 #define MIN_INTERVAL /*(900.0/3600.0)*/ 0.0
@@ -282,6 +282,7 @@ typedef struct {
   Fits_Word fits_word[MAX_FITS_WORDS];
 } Fits_Header;
 
+#define OBSERVAT_KEYWORD "observat"
 #define FILTERNAME_KEYWORD "filterna"
 #define FILTERID_KEYWORD "filterid"
 #define LST_KEYWORD "lst"

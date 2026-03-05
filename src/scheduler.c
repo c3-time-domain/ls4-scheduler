@@ -84,7 +84,7 @@
 //#define WAIT_FLAG False
 
 
-//#define DEBUG 1
+#define DEBUG 1
 
 #define LOOP_WAIT_SEC 10 /* seconds to wait between loops if no
                field selected */

@@ -30,9 +30,9 @@ alias questctl-log='latest_log=`$observer_ssh ls -t /home/observer/logs/questctl
 *log`;gnome-terminal --geometry 90x32+-16--12 -t "questctl log" --window -- $obs
 erver_ssh tail -F $latest_log'
 
-alias scheduler-log='dt=`$observer_ssh get_ut_date`;data_dir=`$observer_ssh get_
-data_dir`;gnome-terminal  --geometry 81x26--21+9 -t "scheduler log $dt" --window
- -- $observer_ssh tail -F $data_dir/logs/$dt.log'
+alias scheduler-log='dt=`$observer_ssh get_ut_date`;data_dir=`$observer_ssh '\''
+echo $LS4_DATA_DIR'\''`;gnome-terminal  --geometry 81x26--21+9 -t "scheduler log 
+$dt" --window -- $observer_ssh tail -F $data_dir/$dt/logs/$dt.log'
 
 alias observe='obs-control; obs-control-log; ccp-log; questctl-log; scheduler-lo
 g'

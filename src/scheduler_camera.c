@@ -1003,7 +1003,7 @@ int clear_camera()
        fprintf(stderr,"clear_camera: start clearing camera for %7.3f sec\n",clear_time);
        fflush(stderr);
      }
-     sprintf(command_string,"%s %d",CLEAR_COMMAND,clear_time);
+     sprintf(command_string,"%s %7.3f",CLEAR_COMMAND,clear_time);
 
      command_id++;
      if(do_camera_command(command_string,reply,timeout,command_id,host_name)!=0){
