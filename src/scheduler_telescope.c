@@ -172,7 +172,13 @@ int get_telescope_offsets(Field *f, Telescope_Status *status)
 
         /* form system command for offset script*/
 
-        sprintf(command_string,"%s %s\n",OFFSET_SCRIPT,f->filename);
+        if (snprintf(command_string, sizeof(command_string), "%s %s\n",
+                     OFFSET_SCRIPT, f->filename) >= (int)sizeof(command_string)) {
+            fprintf(stderr, "get_telescope_offsets: offset command too long for %s\n",
+                    f->filename);
+            fflush(stderr);
+            return(-1);
+        }
 
         if(verbose){
            fprintf(stderr,"get_telescope_offsets: %s\n",command_string);
@@ -1019,4 +1025,3 @@ double get_jd()
     return(jd);
 }
 /*****************************************************/
-

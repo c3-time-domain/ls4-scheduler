@@ -63,7 +63,7 @@
 
 
 */
-
+#define DEBUG 1
 #include "scheduler.h"
 #include <unistd.h>
 
@@ -79,15 +79,12 @@
 
 
 // Try WAIT_FLAG True instead of False because of coding error
-#define WAIT_FLAG True 
+//#define WAIT_FLAG True
 
-//#define WAIT_FLAG False
-
-
-#define DEBUG 1
+#define WAIT_FLAG False
 
 #define LOOP_WAIT_SEC 10 /* seconds to wait between loops if no
-               field selected */
+	               field selected */
 
 #define WAIT_FOR_DOME_OPEN 0 /* don't need to have dome open to observer */
 
@@ -213,7 +210,11 @@ int main(int argc, char **argv)
     sscanf(argv[4],"%hd",&(date.d));
     sscanf(argv[5],"%d",&verbose);
     if (verbose > 1)verbose1=1;
-    sprintf(new_script_name,"%s.add",script_name);
+    if (snprintf(new_script_name, sizeof(new_script_name), "%s.add", script_name)
+            >= (int)sizeof(new_script_name)) {
+      fprintf(stderr, "script name too long: %s\n", script_name);
+      do_exit(-1);
+    }
     fprintf(stderr,"new script name is %s\n",new_script_name);
     fflush(stderr);
 
@@ -1640,14 +1641,17 @@ int observe_next_field(Field *sequence, int index, int index_prev,
 
     if(f->shutter==FOCUS_CODE){
        if(f->n_done==0){
+        fprintf(stderr, "FOCUS RA  = %f\n", f->ra);
+        fprintf(stderr, "FOCUS DEC = %f\n", f->dec);
 #if 0
       ha=1.0;
       f->ra=lst-1.0;
 #else
       ha=-1.0;
-      f->ra=lst+1.0;
+      f->ra=lst+0.0;
+      
 #endif
-      f->dec=0.0;
+      f->dec=-30.0;
       fprintf(stderr,
          "observe_next_field: Pointing %s at %12.6f %12.5f\n",
          field_description,f->ra,f->dec);
@@ -1672,10 +1676,14 @@ int observe_next_field(Field *sequence, int index, int index_prev,
 
     else if (f->shutter==EVENING_FLAT_CODE){
     if(f->n_done==0){
-        ha=-3.0;
-        f->ra=lst+3.0;
-        if(f->ra>24.0)f->ra=f->ra-24.0;
-        f->dec=0.0;
+        //  Edited by G. Pignata 24/04/2026 
+        fprintf(stderr, "SKYFLAT RA  = %f\n", f->ra);
+        fprintf(stderr, "SKYFLAT DEC = %f\n", f->dec);
+        ha=lst-f->ra;
+     //   ha=3.0;  
+     //   f->ra=lst+1.0;
+     //   if(f->ra>24.0)f->ra=f->ra-24.0;
+     //   f->dec=0.0;
         fprintf(stderr,
            "observe_next_field: Pointing %s at %12.6f %12.5f\n",
            field_description, f->ra,f->dec);
@@ -1686,10 +1694,14 @@ int observe_next_field(Field *sequence, int index, int index_prev,
 
     else if (f->shutter==MORNING_FLAT_CODE){
     if(f->n_done==0){
-        ha=3.0;
-        f->ra=lst-3.0;
-        if(f->ra<0.0)f->ra=f->ra+24.0;
-        f->dec=0.0;
+        //  Edited by G. Pignata 24/04/2026 
+        fprintf(stderr, "SKYFLAT RA  = %f\n", f->ra);
+        fprintf(stderr, "SKYFLAT DEC = %f\n", f->dec);
+        ha=lst-f->ra;
+        // ha=-3.0; 
+        //f->ra=lst-2.0;
+        //if(f->ra<0.0)f->ra=f->ra+24.0;
+        //f->dec=0.0;
         fprintf(stderr,
            "observe_next_field: Pointing %s at %12.6f %12.5f\n",
            field_description, f->ra,f->dec);
@@ -1975,7 +1987,7 @@ fprintf(stderr,"HA = %10.6f,  expt = %10.6f,  LONG_EXPTIME = %10.6f\n",
        fflush(stderr);
 
        if(set_telescope_focus(focus)!=0){
-         printf(stderr,"observe_next_field: unable to set telescope focus\n");
+         fprintf(stderr,"observe_next_field: unable to set telescope focus\n");
          return(-1);
        }
     
@@ -3059,6 +3071,9 @@ int init_fields(Field *sequence, int num_fields,
      fprintf(stderr,"dark night duration : %10.6f\n",dark_night_duration);
      fprintf(stderr,"whole night duration : %10.6f\n",whole_night_duration);
     }
+    
+    
+    
 
     n_observable=0;
     for (i=0;i<num_fields;i++){
@@ -3102,7 +3117,8 @@ int init_fields(Field *sequence, int num_fields,
     eclipt(f->ra,f->dec,2000.0,nt->jd_start,&(f->epoch),&(f->ecl_long),&(f->ecl_lat));
 
     /* calculate total time object will be observable (jd_set-jd_rise)
-       and the total time required to make all the observations. Again,
+       and the total time required to make 
+       all the observations. Again,
        these are irrelevant for darks, flats, focus fields, and offset fields */
 
     f->time_up=(f->jd_set-f->jd_rise)*24.0;
@@ -3307,16 +3323,16 @@ int init_fields(Field *sequence, int num_fields,
            n_observable++;
            f->doable=1;
            f->jd_set = nt->jd_sunrise-SKYFLAT_WAIT_TIME;
-           if(jd>nt->jd_end){
+           if(jd>nt->jd_end+SKYFLAT_ST_TIME){
            f->jd_next=jd;
            f->jd_rise=jd;
            f->time_up=(f->jd_set-jd)*24.0;
            f->time_left=f->time_up;
            }
            else{
-           f->time_up=(f->jd_set-nt->jd_end)*24.0;
-           f->jd_next=nt->jd_end;
-           f->jd_rise=nt->jd_end;
+           f->time_up=(f->jd_set-(nt->jd_end+SKYFLAT_ST_TIME))*24.0;
+           f->jd_next=nt->jd_end+SKYFLAT_ST_TIME;
+           f->jd_rise=nt->jd_end+SKYFLAT_ST_TIME;
            f->time_left=(f->jd_set-jd)*24.0;
            }
 
@@ -3863,4 +3879,3 @@ int print_history(double jd, Field *sequence, int num_fields,FILE *output)
 }
 
 /*************************************************************************/
-

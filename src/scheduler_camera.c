@@ -343,7 +343,14 @@ int take_exposure(Field *f, Fits_Header *header, double *actual_expt,
     }
 
     if (strlen(EXPOSE_COMMAND) + strlen(shutter_state) + 9 + strlen(filename) + strlen(exp_mode) < STR_BUF_LEN){
-        sprintf(command,"%s %s %9.3f %s %s",EXPOSE_COMMAND,shutter_state,expt,filename,exp_mode);
+        if (snprintf(command, sizeof(command), "%s %s %9.3f %s %s",
+                     EXPOSE_COMMAND, shutter_state, expt, filename, exp_mode)
+                >= (int)sizeof(command)) {
+            fprintf(stderr,"take_exposure: command buffer overflow building exposure command\n");
+            fflush(stderr);
+            readout_pending = False;
+            return -1;
+        }
     }
     else{
          fprintf(stderr,"take_exposure: command length too long : [%s %s %9.3f %s %s]\n",
@@ -391,8 +398,8 @@ int take_exposure(Field *f, Fits_Header *header, double *actual_expt,
        }
 
        if(verbose1){
-          fprintf(stderr,"take_exposure: success creating do_camera_command_thread, thread_id = %d\n",
-                 thread_id);
+          fprintf(stderr,"take_exposure: success creating do_camera_command_thread, thread_id = %lu\n",
+                 (unsigned long)thread_id);
           fflush(stderr);
        }
 
@@ -449,7 +456,8 @@ int take_exposure(Field *f, Fits_Header *header, double *actual_expt,
          return -1;
        }
        else{
-         sscanf(reply,"%lf",actual_expt);
+         /* LS4 CCP returns a DONE/ERROR token, not a numeric exposure time. */
+         *actual_expt = expt;
        }
 
        readout_pending = False;

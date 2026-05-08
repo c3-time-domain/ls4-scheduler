@@ -33,8 +33,8 @@ int send_command(char *command, char *reply, char *machine, int port, int timeou
   for(i=0;i<MAXBUFSIZE;i++)reply[i]=0;
 
   if(verbose1){
-     fprintf(stderr,"send_command[%d]: %12.6f command : [%s] of len %ld at [%ld]\n\n",
-               port,get_ut(),command,strlen(command),command);
+     fprintf(stderr,"send_command[%d]: %12.6f command : [%s] of len %zu at [%p]\n\n",
+               port,get_ut(),command,strlen(command),(void *)command);
      fflush(stderr);
   }
      
@@ -63,8 +63,8 @@ int send_command(char *command, char *reply, char *machine, int port, int timeou
 
 
   if(verbose1){
-            fprintf(stderr,"send_command [%d]: %12.6f writing command : [%s] at [%ld]\n\n",
-		port,get_ut(),command,command);
+            fprintf(stderr,"send_command [%d]: %12.6f writing command : [%s] at [%p]\n\n",
+		port,get_ut(),command,(void *)command);
             fflush(stderr);
   }
 
@@ -262,6 +262,12 @@ int call_socket(char *hostname, u_short portnum, int read_timeout_sec)
      struct sockaddr_in sa;
      struct hostent *hp;
      int s;
+     int flags;
+     int connect_result;
+     int so_error;
+     socklen_t so_error_len;
+     fd_set write_set;
+     struct timeval connect_timeout;
 
      if ((hp= gethostbyname(hostname)) == NULL) { /* do we know the host's */
  	errno= ECONNREFUSED; /* address? */
@@ -280,10 +286,54 @@ int call_socket(char *hostname, u_short portnum, int read_timeout_sec)
      tv.tv_usec = 0;
      setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
 
- 	
-     if (connect(s,(const  struct sockaddr* )&sa,sizeof sa) < 0) { /* connect */
- 	close(s);
- 	return(-1);
+     flags = fcntl(s, F_GETFL, 0);
+     if (flags < 0) {
+        close(s);
+        return(-1);
+     }
+
+     if (fcntl(s, F_SETFL, flags | O_NONBLOCK) < 0) {
+        close(s);
+        return(-1);
+     }
+
+     connect_result = connect(s,(const struct sockaddr* )&sa,sizeof sa);
+     if (connect_result < 0) {
+        if (errno != EINPROGRESS) {
+           close(s);
+           return(-1);
+        }
+
+        FD_ZERO(&write_set);
+        FD_SET(s, &write_set);
+        connect_timeout.tv_sec = read_timeout_sec;
+        connect_timeout.tv_usec = 0;
+
+        connect_result = select(s + 1, NULL, &write_set, NULL, &connect_timeout);
+        if (connect_result <= 0) {
+           if (connect_result == 0) {
+              errno = ETIMEDOUT;
+           }
+           close(s);
+           return(-1);
+        }
+
+        so_error = 0;
+        so_error_len = sizeof(so_error);
+        if (getsockopt(s, SOL_SOCKET, SO_ERROR, &so_error, &so_error_len) < 0) {
+           close(s);
+           return(-1);
+        }
+        if (so_error != 0) {
+           errno = so_error;
+           close(s);
+           return(-1);
+        }
+     }
+
+     if (fcntl(s, F_SETFL, flags) < 0) {
+        close(s);
+        return(-1);
      }
      
      return(s);
@@ -344,4 +394,3 @@ int establish(u_short portnum)
     
     return(s);
  }
-

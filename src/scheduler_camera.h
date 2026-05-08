@@ -89,5 +89,6 @@ enum Amp_Direction_Code {BOTH_AMP_DIR,LEFT_AMP_DIR,RIGHT_AMP_DIR};
 #define REBOOT_COMMAND "reboot"
 #define RESTART_COMMAND "restart"
 
+double init_cam_readout_time(char *amp_direction);
 
 

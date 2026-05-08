@@ -147,6 +147,10 @@ int get_sys_date(struct date_time *date, short use_dst, short enter_ut,
 
 void print_all(double jdin);
 double date_to_jd(struct date_time date);
+void caldat(double jdin, struct date_time *date, short *dow);
+void galact(double ra, double dec, double epoch, double *glong, double *glat);
+void eclipt(double ra, double dec, double epoch, double jd, double *curep,
+            double *eclong, double *eclat);
 
 void set_zenith(struct date_time date, short use_dst, short enter_ut, 
 		short night_date, double stdz, double lat,

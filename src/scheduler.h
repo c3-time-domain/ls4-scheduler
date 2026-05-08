@@ -31,7 +31,12 @@
 #
 #define USE_TELESCOPE_OFFSETS 0 /* change to 1 to use telescope_offsets file for offset */
 
+//PSC
+#define DEBUG 1
+
+#ifndef DEBUG
 #define DEBUG 0
+#endif
 /*#define POINTING_TEST*/ /* define to break up all exposures longer than LONG_EXPOSURE,
                          both west and east of the meridian */
 
@@ -41,8 +46,11 @@
 #define DEG_TO_RAD (3.14159/180.0)
 #define SIDEREAL_DAY_IN_HOURS 23.93446972
 
-#define SKYFLAT_WAIT_TIME (0.5/24) /* wait half hour after sunset or stop
+#define SKYFLAT_WAIT_TIME (0.28/24) /* wait 0.3 hour after sunset or stop
                                       half hour before sunset for skyflats */
+                                      
+#define SKYFLAT_ST_TIME (0.5/24) /* skyflat sequence */
+                        
 
 #define DARK_WAIT_TIME (0.0/24) /* wait half hour after sunset or stop
                                       half hour before sunset for skyflats */
@@ -76,7 +84,7 @@
 #define MAX_DEC 30.0 /* no decs higher than this */
 #define MIN_FOCUS 24.0 /* no focus setting (mm) less than this */
 #define MAX_FOCUS 30.0/* no focus setting (mm) more than this */
-#define MIN_FOCUS_INCREMENT 0.025 /* no focus increment (mm) less than this */
+#define MIN_FOCUS_INCREMENT 0.01 /* no focus increment (mm) less than this */
 #define MAX_FOCUS_INCREMENT 0.10 /* no focus increment (mm) less than this */
 #define MAX_FOCUS_CHANGE 0.3 /* maximum change from expected default mm */
 #define MIN_MOON_SEPARATION 15.0 /* minimum pointing separation (deg) from moon */
@@ -125,9 +133,9 @@
 #define DO_NOW_STATUS 2
 
 /* nominal focus start, increment, and default setting (mm) */
-#define NOMINAL_FOCUS_START 25.30
-#define NOMINAL_FOCUS_INCREMENT 0.05
-#define NOMINAL_FOCUS_DEFAULT 25.30
+#define NOMINAL_FOCUS_START 27.95
+#define NOMINAL_FOCUS_INCREMENT 0.01
+#define NOMINAL_FOCUS_DEFAULT 27.95
 
 #define NUM_FOCUS_ITERATIONS 2 /* number of times to send focus command on each change
                                   of focus */
