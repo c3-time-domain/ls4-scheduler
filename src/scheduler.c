@@ -115,7 +115,7 @@ char *selection_string[] = {"not selected", "first do_now flat", "first do_now d
        "first_do_now sky field", "first ready paired field", "first late paired field",
        "first not-ready late paired field", "first not-ready and not-late paired field",
        "late must-do field with least time left", "ready must-do field with least time left",
-       "ready field with least time left", "late ready field with most time left"};
+       "ready field with least time left", "late ready field with most time left", "sequential"};
 
 /************************************************************/
       
@@ -2417,391 +2417,439 @@ int get_shutter_string(char *string, int shutter, char *description)
 
 */
 
-int get_next_field(Field *sequence,int num_fields, int i_prev,
-                double jd, int bad_weather)
+// MODIFIED BY KWL 20260508 FOR SEQUENTIAL SCHEDULING OF FIELDS 
+
+int get_next_field(Field *sequence, int num_fields, int i_prev,
+                   double jd, int bad_weather)
 {
-     Field *f,*f_prev,*f_next;
-     double time_left_min,time_left,time_left_max;
-     int i,n_left,n_left_min,n_left_min_must_do;
-     int i_min,i_max,status,n_ready,n_late;
-     int n_do_now,i_min_dark, i_min_flat,i_min_do_now;
-     int n_ready_must_do,n_late_must_do;
-     char field_status[256];
+    Field *f;
+    int i;
+    char field_status[256];
 
-     if(i_prev>=0&&i_prev<num_fields-1){
-       f_prev=sequence+i_prev;
-       f_next=sequence+i_prev+1;
-     }
-     else{
-       f_prev=NULL;
-       f_next=NULL;
-     }
-
-     n_left_min=100000;
-     n_left_min_must_do=100000;
-     n_ready=0;
-     n_late=0;
-     n_do_now=0;
-     i_min_dark=-1;
-     i_min_flat=-1;
-     i_min_do_now=-1;
-     n_ready_must_do=0;
-     n_late_must_do=0;
-
-     if(verbose){  
-    fprintf(stderr,"get_next_field: updating field status\n");
-     }
-
-     for(i=0;i<num_fields;i++){
-     f=sequence+i;
-
-     update_field_status(f,jd,bad_weather);
-     if(verbose1){
-       get_field_status_string(f,field_status);
-       fprintf(stderr,"field %d status %s\n",i,field_status);
-     }
-
-#if 1
-     /* for any MUST-DO field with READY_STATUS, increment the count and update minimum
-        value of n_left */
-
-     if (f->status==READY_STATUS&&f->survey_code==MUSTDO_SURVEY_CODE){
-        n_ready_must_do++;
-
-        n_left=f->n_required-f->n_done;
-        
-        if(n_left<n_left_min_must_do){
-         n_left_min_must_do=n_left;
-        }
-
-     }
-
-     /* status of DO_NOW_STATUS  means must do now (i.e. darks or 2nd offset
-        field).  Return field index */
-
-     else if(f->status==DO_NOW_STATUS){
-        n_do_now++;
-        if(i_min_do_now==-1)i_min_do_now=i;
-        if(f->shutter==DARK_CODE&&i_min_dark==-1)i_min_dark=i;
-        if((f->shutter==DOME_FLAT_CODE||f->shutter==EVENING_FLAT_CODE||
-          f->shutter==MORNING_FLAT_CODE)&&i_min_flat==-1)i_min_flat=i;
-        /*return(i);*/
-     }
-
-#else
-     /* status of DO_NOW_STATUS  means must do now (i.e. darks or 2nd offset
-        field).  Return field index */
-
-     if(f->status==DO_NOW_STATUS){
-        n_do_now++;
-        if(i_min_do_now==-1)i_min_do_now=i;
-        if(f->shutter==DARK_CODE&&i_min_dark==-1)i_min_dark=i;
-        if((f->shutter==DOME_FLAT_CODE||f->shutter==EVENING_FLAT_CODE||
-          f->shutter==MORNING_FLAT_CODE)&&i_min_flat==-1)i_min_flat=i;
-        /*return(i);*/
-     }
-
-     /* for any MUST-DO field with READY_STATUS, increment the count and update minimum
-        value of n_left */
-
-     else if (f->status==READY_STATUS&&f->survey_code==MUSTDO_SURVEY_CODE){
-        n_ready_must_do++;
-
-        n_left=f->n_required-f->n_done;
-        
-        if(n_left<n_left_min_must_do){
-         n_left_min_must_do=n_left;
-        }
-
-     }
-#endif
-
-     /* for any other field with READY_STATUS, increment the count and update minimum
-        value of n_left */
-
-     else if (f->status==READY_STATUS){
-        n_ready++;
-
-        n_left=f->n_required-f->n_done;
-        
-        if(n_left<n_left_min){
-         n_left_min=n_left;
-        }
-
-     }
-
-     /* Also count fields with TOO_LATE_STATUS */
-
-     else if (f->status==TOO_LATE_STATUS){
-        n_late++;
-        if(f->survey_code==MUSTDO_SURVEY_CODE)n_late_must_do++;
-     }
-
-     } //for(i=0;i<num_fields;i++){
-
-     /* If there are MUST_DO fields with READY_STATUS, 
-    choose the one that has least time left to complete the 
-    required observations */       
-
-     if(n_ready_must_do>0){
-       if(verbose){
-       fprintf(stderr,"get_next_field: checking %d ready must-do fields \n",n_ready_must_do);
-       }
-      
-       if(verbose) {
-      fprintf(stderr,"get_next_field: %d must-do fields ready\n",n_ready_must_do);
-       }
-
-       time_left_min=10000.0;
-       i_min=-1;
-
-       for(i=0;i<num_fields;i++){
-     f=sequence+i;
-     if(f->status==READY_STATUS&&f->survey_code==MUSTDO_SURVEY_CODE){
-        n_left=f->n_required-f->n_done;
-        if((f->n_required==6||n_left==n_left_min_must_do)&&f->time_left<time_left_min){
-         i_min=i;
-         time_left_min=f->time_left;
-        }
-     }
-       }
-
-       if(verbose){
-      fprintf(stderr,"get_next_field: returning ready must-do field : %d\n",i_min);
-       }
-       (sequence+i_min)->selection_code = LEAST_TIME_READY_MUST_DO;
-       return(i_min);
-
-     }
-
-      /* If there are MUST-DO fields with TOO_LATE_STATUS, choose the one
-    that has the least time left.  Shorten the interval so 
-    that time_left=0.  If still doable, choose this field*/
-
-     if (n_late_must_do>0){
-    if(verbose1){
-       fprintf(stderr,"get_next_field: checking %d too-late must-do fields \n",n_late_must_do);
+    if(verbose){
+        fprintf(stderr,"get_next_field: updating field status (sequential mode)\n");
     }
 
-    if(verbose1) {
-      fprintf(stderr,"get_next_field: %d must-do late fields\n",n_late_must_do);
-    }
-
-    i_min=-1;
-    time_left_min=10000.0;
-    for(i=0;i<=num_fields;i++){
-      f=sequence+i;
-      if(f->status==TOO_LATE_STATUS&&f->survey_code==MUSTDO_SURVEY_CODE&&f->time_left<time_left_min){
-          time_left_min=f->time_left;
-          i_min=i;
-      }
-    }
-
-    // This shouldn't happen
-    if(i_min<0){
-       fprintf(stderr,
-          "ERROR: get_next_field: n_late_must_do [%d] > 0 but non appear in the field list\n",
-          n_late_must_do);
-       fflush(stdout);
-       fflush(stderr);
-       //return(-1);
-    }
-       
-    if(verbose1){
-       fprintf(stderr,
-        "get_next_field: choosing field %d to shorten intervals\n",
-         i_min);
-    }
-       
-    f=sequence+i_min;
-    shorten_interval(f);
-    update_field_status(f,jd,bad_weather);
-
-    if(verbose1){
-       fprintf(stderr,
-          "get_next_field: interval shortened to %10.6f\n",
-          f->interval*3600.0);
-    }
-    if(verbose1){
-      fprintf(stderr,"get_next_field: returning late must-do field : %d\n",i_min);
-    }
-    (sequence+i_min)->selection_code = LEAST_TIME_LATE_MUST_DO;
-    return(i_min);
-     }
-
- 
-     /* If there were fields with DO_NOW_STATUS, choose the first flat,
-    or else the first dark, or else the first field */
-
-     if(n_do_now>0){
-    if(verbose1){
-       fprintf(stderr,"get_next_field: checking %d do_now fields\n",n_do_now);
-    }
-
-    if(i_min_flat>=0){
-          if(verbose1){
-          fprintf(stderr,"get_next_field: returning i_min_flat: %d\n",i_min_flat);
-          }
-          (sequence+i_min_flat)->selection_code = FIRST_DO_NOW_FLAT;
-          return(i_min_flat);
-    }
-    else if(i_min_dark>=0){
-          if(verbose1){
-          fprintf(stderr,"get_next_field: returning i_min_dark: %d\n",i_min_dark);
-          }
-          (sequence+i_min_dark)->selection_code = FIRST_DO_NOW_DARK;
-          return(i_min_dark);
-    }
-    else{
-          if(verbose1){
-          fprintf(stderr,"get_next_field: returning i_min_do_now: %d\n",i_min_do_now);
-          }
-          (sequence+i_min_do_now)->selection_code = FIRST_DO_NOW;
-          return(i_min_do_now);
-    }
-     }
-  
-     /* if the pair to the previous fields is doable, choose the paired field */
-
-     if(f_prev!=NULL&&paired_fields(f_next,f_prev)&&f_next->doable){
-    if(verbose1){
-        fprintf(stderr,"get_next_field: checking for doable pair to previous field %d\n",i_prev);
-    }
-
-    if(verbose1){
-        fprintf(stderr,"get_next_field: field %d is paired with field %d \n",
-            i_prev+1,i_prev);
-    }
-    if(f_next->status==READY_STATUS){
+    /* Update status of all fields first */
+    for(i=0; i<num_fields; i++){
+        f = sequence + i;
+        update_field_status(f, jd, bad_weather);
         if(verbose1){
-        fprintf(stderr,"get_next_field: returning paired field %d \n", i_prev+1);
+            get_field_status_string(f, field_status);
+            fprintf(stderr,"field %d status %s\n", i, field_status);
         }
-        (sequence+i_prev+1)->selection_code = FIRST_READY_PAIR;
-        return(i_prev+1);
-    }
-    else if(f_next->status==TOO_LATE_STATUS){
-      shorten_interval(f_next);
-      update_field_status(f_next,jd,bad_weather);
-      if(f_next->status==READY_STATUS){
-         if(verbose1){
-        fprintf(stderr,"get_next_field: returning late paired field %d \n", i_prev+1);
-         }
-         (sequence+i_prev+1)->selection_code = FIRST_LATE_PAIR;
-         return(i_prev+1);
-      }
-      else{
-         if(verbose1){
-           fprintf(stderr,"get_next_field: returning  not-ready paired field %d \n", i_prev+1);
-         }
-         (sequence+i_prev+1)->selection_code = FIRST_NOT_READY_LATE_PAIR;
-         return(i_prev+1);
-      }
-    }
-    else{
-         if(verbose1){
-           fprintf(stderr,
-          "get_next_field: returning paired field %d that is neither ready nor too late\n",
-          i_prev+1);
-         }
-         (sequence+i_prev+1)->selection_code = FIRST_NOT_READY_NOT_LATE_PAIR;
-         return(i_prev+1);
-    }
-     }
-
-     /* If there are fields with READY_STATUS, choose the one 
-    that has least time left to complete the required observations */
-
-     if(n_ready>0){
-     if(verbose1){
-        fprintf(stderr,"get_next_field: checking %d ready fields \n",n_ready);
-     }
-    
-     time_left_min=10000.0;
-     i_min=-1;
-
-     for(i=0;i<num_fields;i++){
-       f=sequence+i;
-       if(f->status==READY_STATUS){
-          n_left=f->n_required-f->n_done;
-          if(n_left==n_left_min&&f->time_left<time_left_min){
-           i_min=i;
-           time_left_min=f->time_left;
-          }
-       }
-     }
-     if(verbose1){
-        fprintf(stderr,"get_next_field: returning ready field : %d\n",i_min);
-     }
-
-     (sequence+i_min)->selection_code = LEAST_TIME_READY;
-     return(i_min);
-
-     }
-
-     /* If there are no observable fields ready to observe,  but there are
-    fields with TOO_LATE_STATUS, choose the first one with MUSTDO_SURVEY_CODE, or
-    else the field that has the most time left. Shorten the interval so 
-    that time_left=0.  If still doable, choose this field. Otherwise return -1 */
-
-     if (n_late>0){
-
-    if(verbose1){
-        fprintf(stderr,"get_next_field: checking %d late fields \n",n_late);
     }
 
-    i_max=-1;
-    time_left_max=-1000;
-    for(i=0;i<=num_fields;i++){
-      f=sequence+i;
-      if(f->status==TOO_LATE_STATUS&&f->time_left>time_left_max){
-          time_left_max=f->time_left;
-          i_max=i;
-      }
+    /* Walk through fields in order, starting after the previous one.
+       Return the first one that is ready or must be done now. */
+    for(i = i_prev + 1; i < num_fields; i++){
+        f = sequence + i;
+
+        if(f->status == READY_STATUS || f->status == DO_NOW_STATUS){
+            if(verbose1){
+                fprintf(stderr,"get_next_field: returning sequential field %d\n", i);
+            }
+            f->selection_code = SEQUENTIAL;
+            return i;
+        }
+
+        if(verbose1){
+            fprintf(stderr,"get_next_field: skipping field %d (not observable)\n", i);
+        }
     }
 
-
-    if(i_max<0){
-       if(verbose1)fprintf(stderr,"get_next_field: No fields to shorten\n");
-       //return(-1);
-    } 
-    else{
-       
-      if(verbose1){
-         fprintf(stderr,
-          "get_next_field: choosing field %d to shorten intervals\n",
-           i_max);
-      }
-         
-      f=sequence+i_max;
-      shorten_interval(f);
-      update_field_status(f,jd,bad_weather);
-      if(f->status==READY_STATUS){
-
-         if(verbose1){
-        fprintf(stderr,
-           "get_next_field: interval shortened to %10.6f\n",
-           f->interval*3600.0);
-         }
-         (sequence+i_max)->selection_code = MOST_TIME_READY_LATE;
-         return(i_max);
-      }
-      else{
-         if(verbose1){
-        fprintf(stderr,
-           "get_next_field: could not shorten interval of field %d\n",
-           i_max);
-         }
-      }  // if (f->status==READY_STATUS
-    } //if(i_max<0){
- 
-     }  // if(n_late>0)
-
-     if(verbose) {
-    fprintf(stderr,"get_next_field: No fields to observe\n");
-     }
-     return(-1);
-
+    if(verbose){
+        fprintf(stderr,"get_next_field: No more fields to observe\n");
+    }
+    return -1;
 }
+
+
+// int get_next_field(Field *sequence,int num_fields, int i_prev,
+//                 double jd, int bad_weather)
+// {
+//      Field *f,*f_prev,*f_next;
+//      double time_left_min,time_left,time_left_max;
+//      int i,n_left,n_left_min,n_left_min_must_do;
+//      int i_min,i_max,status,n_ready,n_late;
+//      int n_do_now,i_min_dark, i_min_flat,i_min_do_now;
+//      int n_ready_must_do,n_late_must_do;
+//      char field_status[256];
+
+//      if(i_prev>=0&&i_prev<num_fields-1){
+//        f_prev=sequence+i_prev;
+//        f_next=sequence+i_prev+1;
+//      }
+//      else{
+//        f_prev=NULL;
+//        f_next=NULL;
+//      }
+
+//      n_left_min=100000;
+//      n_left_min_must_do=100000;
+//      n_ready=0;
+//      n_late=0;
+//      n_do_now=0;
+//      i_min_dark=-1;
+//      i_min_flat=-1;
+//      i_min_do_now=-1;
+//      n_ready_must_do=0;
+//      n_late_must_do=0;
+
+//      if(verbose){  
+//     fprintf(stderr,"get_next_field: updating field status\n");
+//      }
+
+//      for(i=0;i<num_fields;i++){
+//      f=sequence+i;
+
+//      update_field_status(f,jd,bad_weather);
+//      if(verbose1){
+//        get_field_status_string(f,field_status);
+//        fprintf(stderr,"field %d status %s\n",i,field_status);
+//      }
+
+// #if 1
+//      /* for any MUST-DO field with READY_STATUS, increment the count and update minimum
+//         value of n_left */
+
+//      if (f->status==READY_STATUS&&f->survey_code==MUSTDO_SURVEY_CODE){
+//         n_ready_must_do++;
+
+//         n_left=f->n_required-f->n_done;
+        
+//         if(n_left<n_left_min_must_do){
+//          n_left_min_must_do=n_left;
+//         }
+
+//      }
+
+//      /* status of DO_NOW_STATUS  means must do now (i.e. darks or 2nd offset
+//         field).  Return field index */
+
+//      else if(f->status==DO_NOW_STATUS){
+//         n_do_now++;
+//         if(i_min_do_now==-1)i_min_do_now=i;
+//         if(f->shutter==DARK_CODE&&i_min_dark==-1)i_min_dark=i;
+//         if((f->shutter==DOME_FLAT_CODE||f->shutter==EVENING_FLAT_CODE||
+//           f->shutter==MORNING_FLAT_CODE)&&i_min_flat==-1)i_min_flat=i;
+//         /*return(i);*/
+//      }
+
+// #else
+//      /* status of DO_NOW_STATUS  means must do now (i.e. darks or 2nd offset
+//         field).  Return field index */
+
+//      if(f->status==DO_NOW_STATUS){
+//         n_do_now++;
+//         if(i_min_do_now==-1)i_min_do_now=i;
+//         if(f->shutter==DARK_CODE&&i_min_dark==-1)i_min_dark=i;
+//         if((f->shutter==DOME_FLAT_CODE||f->shutter==EVENING_FLAT_CODE||
+//           f->shutter==MORNING_FLAT_CODE)&&i_min_flat==-1)i_min_flat=i;
+//         /*return(i);*/
+//      }
+
+//      /* for any MUST-DO field with READY_STATUS, increment the count and update minimum
+//         value of n_left */
+
+//      else if (f->status==READY_STATUS&&f->survey_code==MUSTDO_SURVEY_CODE){
+//         n_ready_must_do++;
+
+//         n_left=f->n_required-f->n_done;
+        
+//         if(n_left<n_left_min_must_do){
+//          n_left_min_must_do=n_left;
+//         }
+
+//      }
+// #endif
+
+//      /* for any other field with READY_STATUS, increment the count and update minimum
+//         value of n_left */
+
+//      else if (f->status==READY_STATUS){
+//         n_ready++;
+
+//         n_left=f->n_required-f->n_done;
+        
+//         if(n_left<n_left_min){
+//          n_left_min=n_left;
+//         }
+
+//      }
+
+//      /* Also count fields with TOO_LATE_STATUS */
+
+//      else if (f->status==TOO_LATE_STATUS){
+//         n_late++;
+//         if(f->survey_code==MUSTDO_SURVEY_CODE)n_late_must_do++;
+//      }
+
+//      } //for(i=0;i<num_fields;i++){
+
+//      /* If there are MUST_DO fields with READY_STATUS, 
+//     choose the one that has least time left to complete the 
+//     required observations */       
+
+//      if(n_ready_must_do>0){
+//        if(verbose){
+//        fprintf(stderr,"get_next_field: checking %d ready must-do fields \n",n_ready_must_do);
+//        }
+      
+//        if(verbose) {
+//       fprintf(stderr,"get_next_field: %d must-do fields ready\n",n_ready_must_do);
+//        }
+
+//        time_left_min=10000.0;
+//        i_min=-1;
+
+//        for(i=0;i<num_fields;i++){
+//      f=sequence+i;
+//      if(f->status==READY_STATUS&&f->survey_code==MUSTDO_SURVEY_CODE){
+//         n_left=f->n_required-f->n_done;
+//         if((f->n_required==6||n_left==n_left_min_must_do)&&f->time_left<time_left_min){
+//          i_min=i;
+//          time_left_min=f->time_left;
+//         }
+//      }
+//        }
+
+//        if(verbose){
+//       fprintf(stderr,"get_next_field: returning ready must-do field : %d\n",i_min);
+//        }
+//        (sequence+i_min)->selection_code = LEAST_TIME_READY_MUST_DO;
+//        return(i_min);
+
+//      }
+
+//       /* If there are MUST-DO fields with TOO_LATE_STATUS, choose the one
+//     that has the least time left.  Shorten the interval so 
+//     that time_left=0.  If still doable, choose this field*/
+
+//      if (n_late_must_do>0){
+//     if(verbose1){
+//        fprintf(stderr,"get_next_field: checking %d too-late must-do fields \n",n_late_must_do);
+//     }
+
+//     if(verbose1) {
+//       fprintf(stderr,"get_next_field: %d must-do late fields\n",n_late_must_do);
+//     }
+
+//     i_min=-1;
+//     time_left_min=10000.0;
+//     for(i=0;i<=num_fields;i++){
+//       f=sequence+i;
+//       if(f->status==TOO_LATE_STATUS&&f->survey_code==MUSTDO_SURVEY_CODE&&f->time_left<time_left_min){
+//           time_left_min=f->time_left;
+//           i_min=i;
+//       }
+//     }
+
+//     // This shouldn't happen
+//     if(i_min<0){
+//        fprintf(stderr,
+//           "ERROR: get_next_field: n_late_must_do [%d] > 0 but non appear in the field list\n",
+//           n_late_must_do);
+//        fflush(stdout);
+//        fflush(stderr);
+//        //return(-1);
+//     }
+       
+//     if(verbose1){
+//        fprintf(stderr,
+//         "get_next_field: choosing field %d to shorten intervals\n",
+//          i_min);
+//     }
+       
+//     f=sequence+i_min;
+//     shorten_interval(f);
+//     update_field_status(f,jd,bad_weather);
+
+//     if(verbose1){
+//        fprintf(stderr,
+//           "get_next_field: interval shortened to %10.6f\n",
+//           f->interval*3600.0);
+//     }
+//     if(verbose1){
+//       fprintf(stderr,"get_next_field: returning late must-do field : %d\n",i_min);
+//     }
+//     (sequence+i_min)->selection_code = LEAST_TIME_LATE_MUST_DO;
+//     return(i_min);
+//      }
+
+ 
+//      /* If there were fields with DO_NOW_STATUS, choose the first flat,
+//     or else the first dark, or else the first field */
+
+//      if(n_do_now>0){
+//     if(verbose1){
+//        fprintf(stderr,"get_next_field: checking %d do_now fields\n",n_do_now);
+//     }
+
+//     if(i_min_flat>=0){
+//           if(verbose1){
+//           fprintf(stderr,"get_next_field: returning i_min_flat: %d\n",i_min_flat);
+//           }
+//           (sequence+i_min_flat)->selection_code = FIRST_DO_NOW_FLAT;
+//           return(i_min_flat);
+//     }
+//     else if(i_min_dark>=0){
+//           if(verbose1){
+//           fprintf(stderr,"get_next_field: returning i_min_dark: %d\n",i_min_dark);
+//           }
+//           (sequence+i_min_dark)->selection_code = FIRST_DO_NOW_DARK;
+//           return(i_min_dark);
+//     }
+//     else{
+//           if(verbose1){
+//           fprintf(stderr,"get_next_field: returning i_min_do_now: %d\n",i_min_do_now);
+//           }
+//           (sequence+i_min_do_now)->selection_code = FIRST_DO_NOW;
+//           return(i_min_do_now);
+//     }
+//      }
+  
+//      /* if the pair to the previous fields is doable, choose the paired field */
+
+//      if(f_prev!=NULL&&paired_fields(f_next,f_prev)&&f_next->doable){
+//     if(verbose1){
+//         fprintf(stderr,"get_next_field: checking for doable pair to previous field %d\n",i_prev);
+//     }
+
+//     if(verbose1){
+//         fprintf(stderr,"get_next_field: field %d is paired with field %d \n",
+//             i_prev+1,i_prev);
+//     }
+//     if(f_next->status==READY_STATUS){
+//         if(verbose1){
+//         fprintf(stderr,"get_next_field: returning paired field %d \n", i_prev+1);
+//         }
+//         (sequence+i_prev+1)->selection_code = FIRST_READY_PAIR;
+//         return(i_prev+1);
+//     }
+//     else if(f_next->status==TOO_LATE_STATUS){
+//       shorten_interval(f_next);
+//       update_field_status(f_next,jd,bad_weather);
+//       if(f_next->status==READY_STATUS){
+//          if(verbose1){
+//         fprintf(stderr,"get_next_field: returning late paired field %d \n", i_prev+1);
+//          }
+//          (sequence+i_prev+1)->selection_code = FIRST_LATE_PAIR;
+//          return(i_prev+1);
+//       }
+//       else{
+//          if(verbose1){
+//            fprintf(stderr,"get_next_field: returning  not-ready paired field %d \n", i_prev+1);
+//          }
+//          (sequence+i_prev+1)->selection_code = FIRST_NOT_READY_LATE_PAIR;
+//          return(i_prev+1);
+//       }
+//     }
+//     else{
+//          if(verbose1){
+//            fprintf(stderr,
+//           "get_next_field: returning paired field %d that is neither ready nor too late\n",
+//           i_prev+1);
+//          }
+//          (sequence+i_prev+1)->selection_code = FIRST_NOT_READY_NOT_LATE_PAIR;
+//          return(i_prev+1);
+//     }
+//      }
+
+//      /* If there are fields with READY_STATUS, choose the one 
+//     that has least time left to complete the required observations */
+
+//      if(n_ready>0){
+//      if(verbose1){
+//         fprintf(stderr,"get_next_field: checking %d ready fields \n",n_ready);
+//      }
+    
+//      time_left_min=10000.0;
+//      i_min=-1;
+
+//      for(i=0;i<num_fields;i++){
+//        f=sequence+i;
+//        if(f->status==READY_STATUS){
+//           n_left=f->n_required-f->n_done;
+//           if(n_left==n_left_min&&f->time_left<time_left_min){
+//            i_min=i;
+//            time_left_min=f->time_left;
+//           }
+//        }
+//      }
+//      if(verbose1){
+//         fprintf(stderr,"get_next_field: returning ready field : %d\n",i_min);
+//      }
+
+//      (sequence+i_min)->selection_code = LEAST_TIME_READY;
+//      return(i_min);
+
+//      }
+
+//      /* If there are no observable fields ready to observe,  but there are
+//     fields with TOO_LATE_STATUS, choose the first one with MUSTDO_SURVEY_CODE, or
+//     else the field that has the most time left. Shorten the interval so 
+//     that time_left=0.  If still doable, choose this field. Otherwise return -1 */
+
+//      if (n_late>0){
+
+//     if(verbose1){
+//         fprintf(stderr,"get_next_field: checking %d late fields \n",n_late);
+//     }
+
+//     i_max=-1;
+//     time_left_max=-1000;
+//     for(i=0;i<=num_fields;i++){
+//       f=sequence+i;
+//       if(f->status==TOO_LATE_STATUS&&f->time_left>time_left_max){
+//           time_left_max=f->time_left;
+//           i_max=i;
+//       }
+//     }
+
+
+//     if(i_max<0){
+//        if(verbose1)fprintf(stderr,"get_next_field: No fields to shorten\n");
+//        //return(-1);
+//     } 
+//     else{
+       
+//       if(verbose1){
+//          fprintf(stderr,
+//           "get_next_field: choosing field %d to shorten intervals\n",
+//            i_max);
+//       }
+         
+//       f=sequence+i_max;
+//       shorten_interval(f);
+//       update_field_status(f,jd,bad_weather);
+//       if(f->status==READY_STATUS){
+
+//          if(verbose1){
+//         fprintf(stderr,
+//            "get_next_field: interval shortened to %10.6f\n",
+//            f->interval*3600.0);
+//          }
+//          (sequence+i_max)->selection_code = MOST_TIME_READY_LATE;
+//          return(i_max);
+//       }
+//       else{
+//          if(verbose1){
+//         fprintf(stderr,
+//            "get_next_field: could not shorten interval of field %d\n",
+//            i_max);
+//          }
+//       }  // if (f->status==READY_STATUS
+//     } //if(i_max<0){
+ 
+//      }  // if(n_late>0)
+
+//      if(verbose) {
+//     fprintf(stderr,"get_next_field: No fields to observe\n");
+//      }
+//      return(-1);
+
+// }
 /*******************************************************/
 
 int paired_fields(Field *f1, Field *f2)

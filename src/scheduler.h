@@ -145,7 +145,7 @@
 // selection codes set by get_next_field()
 enum Selection_Code {NOT_SELECTED,FIRST_DO_NOW_FLAT, FIRST_DO_NOW_DARK, FIRST_DO_NOW, FIRST_READY_PAIR, FIRST_LATE_PAIR,
       FIRST_NOT_READY_LATE_PAIR, FIRST_NOT_READY_NOT_LATE_PAIR, LEAST_TIME_LATE_MUST_DO,
-      LEAST_TIME_READY_MUST_DO, LEAST_TIME_READY, MOST_TIME_READY_LATE};
+      LEAST_TIME_READY_MUST_DO, LEAST_TIME_READY, MOST_TIME_READY_LATE, SEQUENTIAL};
 
 // define accepted filter names and enumerate an index for each filter name
 #define FILTER_NAME (const char*[]) { "rgzz", "none", "fake", "clear", NULL }
